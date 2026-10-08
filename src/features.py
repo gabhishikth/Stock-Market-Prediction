@@ -1,19 +1,20 @@
-import numpy as np
 import pandas as pd
 
 
-def add_returns(df):
+def add_return_features(df):
     df["Return_1D"] = df["Adj Close"].pct_change()
 
     df["Return_Lag_1"] = df["Return_1D"].shift(1)
-    df["Return_Lag_5"] = df["Return_1D"].shift(5)
-    df["Return_Lag_10"] = df["Return_1D"].shift(10)
-    df["Return_Lag_20"] = df["Return_1D"].shift(20)
+    df["Return_Lag_2"] = df["Return_1D"].shift(2)
+
+    df["Return_5D"] = df["Adj Close"].pct_change(5)
+    df["Return_10D"] = df["Adj Close"].pct_change(10)
+    df["Return_20D"] = df["Adj Close"].pct_change(20)
 
     return df
 
 
-def add_moving_average_features(df):
+def add_trend_features(df):
     sma20 = df["Adj Close"].rolling(20).mean()
     sma50 = df["Adj Close"].rolling(50).mean()
     ema20 = df["Adj Close"].ewm(span=20, adjust=False).mean()
@@ -50,7 +51,7 @@ def add_rsi(df, period=14):
     return df
 
 
-def add_macd(df):
+def add_macd_features(df):
     ema12 = df["Adj Close"].ewm(
         span=12,
         adjust=False
@@ -61,36 +62,59 @@ def add_macd(df):
         adjust=False
     ).mean()
 
-    df["MACD"] = ema12 - ema26
+    macd = ema12 - ema26
 
-    df["MACD_Signal"] = df["MACD"].ewm(
+    signal = macd.ewm(
         span=9,
         adjust=False
     ).mean()
+
+    df["MACD_Norm"] = macd / df["Adj Close"]
+
+    df["MACD_Hist"] = (
+        macd - signal
+    ) / df["Adj Close"]
 
     return df
 
 
 def add_bollinger_features(df):
     sma20 = df["Adj Close"].rolling(20).mean()
-    std20 = df["Adj Close"].rolling(20).std()
+
+    std20 = (
+        df["Adj Close"]
+        .rolling(20)
+        .std(ddof=0)
+    )
 
     upper = sma20 + 2 * std20
     lower = sma20 - 2 * std20
 
-    df["BB_%B"] = (df["Adj Close"] - lower) / (upper - lower)
+    df["BB_%B"] = (
+        (df["Adj Close"] - lower)
+        / (upper - lower)
+    )
 
-    df["BB_Width"] = (upper - lower) / sma20
+    df["BB_Width"] = (
+        (upper - lower)
+        / sma20
+    )
 
     return df
 
 
-def add_atr(df, period=14):
+def add_atr_feature(df, period=14):
     previous_close = df["Close"].shift(1)
 
     tr1 = df["High"] - df["Low"]
-    tr2 = (df["High"] - previous_close).abs()
-    tr3 = (df["Low"] - previous_close).abs()
+
+    tr2 = (
+        df["High"] - previous_close
+    ).abs()
+
+    tr3 = (
+        df["Low"] - previous_close
+    ).abs()
 
     true_range = pd.concat(
         [tr1, tr2, tr3],
@@ -115,10 +139,15 @@ def add_volatility_features(df):
         .std()
     )
 
-    volume_average = df["Volume"].rolling(20).mean()
+    volume_average = (
+        df["Volume"]
+        .rolling(20)
+        .mean()
+    )
 
     df["Relative_Volume"] = (
-        df["Volume"] / volume_average
+        df["Volume"]
+        / volume_average
     )
 
     return df
@@ -127,12 +156,12 @@ def add_volatility_features(df):
 def create_features(df):
     df = df.copy()
 
-    df = add_returns(df)
-    df = add_moving_average_features(df)
+    df = add_return_features(df)
+    df = add_trend_features(df)
     df = add_rsi(df)
-    df = add_macd(df)
+    df = add_macd_features(df)
     df = add_bollinger_features(df)
-    df = add_atr(df)
+    df = add_atr_feature(df)
     df = add_volatility_features(df)
 
     return df
